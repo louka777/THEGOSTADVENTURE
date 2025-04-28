@@ -7,18 +7,145 @@
     body {
       background-color: black;
       color: white;
-      font-family: sans-serif;
+      font-family: Arial, sans-serif;
       text-align: center;
-      margin-top: 50px;
     }
     h1 {
       color: red;
       text-shadow: 0 0 10px red;
+      margin-top: 20px;
+    }
+    #messages {
+      list-style-type: none;
+      padding: 0;
+      margin-top: 20px;
+    }
+    #messages li {
+      padding: 5px 10px;
+      margin: 5px 0;
+    }
+    #messages .moderator {
+      color: red;
+      animation: vibrate 0.2s infinite;
+    }
+    @keyframes vibrate {
+      0% { transform: translateX(-2px); }
+      50% { transform: translateX(2px); }
+      100% { transform: translateX(-2px); }
+    }
+    .username {
+      font-weight: bold;
+      color: white;
+    }
+    .moderator-username {
+      color: violet;
+      font-weight: bold;
+    }
+    #form {
+      margin-top: 20px;
+    }
+    #input {
+      padding: 10px;
+      width: 70%;
+    }
+    #muteButton, #flashButton, #modButton {
+      margin: 5px;
+      padding: 10px;
+      background: violet;
+      border: none;
+      color: white;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
   <h1>The Ghost Adventure</h1>
-  <p>Bienvenue sur le forum !</p>
+
+  <ul id="messages"></ul>
+
+  <form id="form">
+    <input id="input" autocomplete="off" placeholder="Tape ton message..." />
+    <button>Envoyer</button>
+  </form>
+
+  <div id="moderatorTools" style="display:none;">
+    <button id="flashButton">Clignoter la page</button>
+    <button id="muteButton">Mute quelqu'un</button>
+    <button id="modButton">Nommer modérateur</button>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let pseudo = prompt('Choisis un pseudo :');
+    let isModerator = false;
+
+    socket.emit('new user', pseudo);
+
+    const form = document.getElementById('form');
+    const input = document.getElementById('input');
+    const messages = document.getElementById('messages');
+    const moderatorTools = document.getElementById('moderatorTools');
+    const flashButton = document.getElementById('flashButton');
+    const muteButton = document.getElementById('muteButton');
+    const modButton = document.getElementById('modButton');
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (input.value) {
+        socket.emit('chat message', input.value);
+        input.value = '';
+      }
+    });
+
+    socket.on('chat message', (data) => {
+      const item = document.createElement('li');
+      item.innerHTML = `<span class="${data.isModerator ? 'moderator-username' : 'username'}">${data.user}:</span> ${data.msg}`;
+      if (data.isModerator) {
+        item.classList.add('moderator');
+      }
+      messages.appendChild(item);
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+
+    socket.on('you are moderator', () => {
+      isModerator = true;
+      moderatorTools.style.display = 'block';
+    });
+
+    flashButton.addEventListener('click', () => {
+      socket.emit('flash');
+    });
+
+    muteButton.addEventListener('click', () => {
+      const userToMute = prompt('Pseudo à mute :');
+      if (userToMute) {
+        socket.emit('mute', userToMute);
+      }
+    });
+
+    modButton.addEventListener('click', () => {
+      const newMod = prompt('Pseudo à nommer modérateur :');
+      if (newMod) {
+        socket.emit('make moderator', newMod);
+      }
+    });
+
+    socket.on('flash', () => {
+      let flashes = 0;
+      const interval = setInterval(() => {
+        document.body.style.backgroundColor = (document.body.style.backgroundColor === 'white') ? 'black' : 'white';
+        flashes++;
+        if (flashes > 6) {
+          clearInterval(interval);
+          document.body.style.backgroundColor = 'black';
+        }
+      }, 100);
+    });
+
+    socket.on('muted', () => {
+      alert('Tu as été mute pendant 5 minutes !');
+    });
+  </script>
 </body>
 </html>
