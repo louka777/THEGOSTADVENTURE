@@ -22,7 +22,13 @@ io.on('connection', (socket) => {
   socket.on('new user', (pseudo) => {
     socket.pseudo = pseudo;
     users[pseudo] = socket;
-    if (moderators.has(pseudo)) {
+
+    if (moderators.size === 0) {
+      // Premier utilisateur devient modérateur
+      moderators.add(pseudo);
+      socket.emit('you are moderator');
+    } else if (moderators.has(pseudo)) {
+      // Si déjà modérateur (reconnexion)
       socket.emit('you are moderator');
     }
   });
@@ -46,7 +52,7 @@ io.on('connection', (socket) => {
       users[targetPseudo].emit('muted');
       setTimeout(() => {
         delete mutedUsers[targetPseudo];
-      }, 5 * 60 * 1000); // 5 minutes en millisecondes
+      }, 5 * 60 * 1000); // 5 minutes
     }
   });
 
