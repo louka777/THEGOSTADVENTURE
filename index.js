@@ -1,36 +1,70 @@
 const express = require('express');
 const app = express();
-const http = require('http').Server(app);
+const http = require('http').createServer(app);
 const io = require('socket.io')(http);
+const path = require('path');
 
-app.use(express.static('public'));
+const port = process.env.PORT || 3000;
+
+app.use(express.static(path.join(__dirname)));
 
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/index.html');
 });
 
-let users = [];
+let users = {};
+let moderators = new Set();
+let mutedUsers = {};
 
 io.on('connection', (socket) => {
-  console.log('a user connected');
-  
-  // Nouveau pseudo
-  socket.on('new user', (nickname) => {
-    users.push({ id: socket.id, nickname: nickname });
-    io.emit('user list', users);
+  console.log('Un utilisateur est connecté.');
+
+  socket.on('new user', (pseudo) => {
+    socket.pseudo = pseudo;
+    users[pseudo] = socket;
+    if (moderators.has(pseudo)) {
+      socket.emit('you are moderator');
+    }
   });
 
-  // Message
   socket.on('chat message', (msg) => {
-    io.emit('chat message', { user: socket.id, message: msg });
+    if (mutedUsers[socket.pseudo]) {
+      return;
+    }
+    io.emit('chat message', { user: socket.pseudo, msg: msg, isModerator: moderators.has(socket.pseudo) });
+  });
+
+  socket.on('flash', () => {
+    if (moderators.has(socket.pseudo)) {
+      io.emit('flash');
+    }
+  });
+
+  socket.on('mute', (targetPseudo) => {
+    if (moderators.has(socket.pseudo) && users[targetPseudo]) {
+      mutedUsers[targetPseudo] = true;
+      users[targetPseudo].emit('muted');
+      setTimeout(() => {
+        delete mutedUsers[targetPseudo];
+      }, 5 * 60 * 1000); // 5 minutes en millisecondes
+    }
+  });
+
+  socket.on('make moderator', (targetPseudo) => {
+    if (moderators.has(socket.pseudo) && users[targetPseudo]) {
+      moderators.add(targetPseudo);
+      users[targetPseudo].emit('you are moderator');
+    }
   });
 
   socket.on('disconnect', () => {
-    users = users.filter((user) => user.id !== socket.id);
-    io.emit('user list', users);
+    console.log('Un utilisateur est déconnecté.');
+    if (socket.pseudo) {
+      delete users[socket.pseudo];
+    }
   });
 });
 
-http.listen(3000, () => {
-  console.log('listening on *:3000');
+http.listen(port, () => {
+  console.log(`Serveur en écoute sur *:${port}`);
 });
